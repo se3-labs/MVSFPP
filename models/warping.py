@@ -65,6 +65,51 @@ def world_from_xy_depth(xy, depth, cam2world, intrinsics):
 
     return world_coords
 
+def inverse_4x4(m: torch.Tensor) -> torch.Tensor:
+    # Get inverse avoiding inv, det operations that are not supported by either ONNX or TensorRT
+    # m: (B, 4, 4)
+    
+    a, b, c, d = m[:, 0], m[:, 1], m[:, 2], m[:, 3]  # (B, 4)
+
+    s0 = a[:, 0]*b[:, 1] - a[:, 1]*b[:, 0]
+    s1 = a[:, 0]*b[:, 2] - a[:, 2]*b[:, 0]
+    s2 = a[:, 0]*b[:, 3] - a[:, 3]*b[:, 0]
+    s3 = a[:, 1]*b[:, 2] - a[:, 2]*b[:, 1]
+    s4 = a[:, 1]*b[:, 3] - a[:, 3]*b[:, 1]
+    s5 = a[:, 2]*b[:, 3] - a[:, 3]*b[:, 2]
+
+    c5 = c[:, 2]*d[:, 3] - c[:, 3]*d[:, 2]
+    c4 = c[:, 1]*d[:, 3] - c[:, 3]*d[:, 1]
+    c3 = c[:, 1]*d[:, 2] - c[:, 2]*d[:, 1]
+    c2 = c[:, 0]*d[:, 3] - c[:, 3]*d[:, 0]
+    c1 = c[:, 0]*d[:, 2] - c[:, 2]*d[:, 0]
+    c0 = c[:, 0]*d[:, 1] - c[:, 1]*d[:, 0]
+
+    inv_det = 1.0 / (
+        s0 * c5 - s1 * c4 + s2 * c3 + s3 * c2 - s4 * c1 + s5 * c0
+    )
+
+    inv = torch.zeros_like(m)
+    inv[:, 0, 0] =  (b[:, 1]*c5 - b[:, 2]*c4 + b[:, 3]*c3) * inv_det
+    inv[:, 0, 1] = -(a[:, 1]*c5 - a[:, 2]*c4 + a[:, 3]*c3) * inv_det
+    inv[:, 0, 2] =  (d[:, 1]*s5 - d[:, 2]*s4 + d[:, 3]*s3) * inv_det
+    inv[:, 0, 3] = -(c[:, 1]*s5 - c[:, 2]*s4 + c[:, 3]*s3) * inv_det
+
+    inv[:, 1, 0] = -(b[:, 0]*c5 - b[:, 2]*c2 + b[:, 3]*c1) * inv_det
+    inv[:, 1, 1] =  (a[:, 0]*c5 - a[:, 2]*c2 + a[:, 3]*c1) * inv_det
+    inv[:, 1, 2] = -(d[:, 0]*s5 - d[:, 2]*s2 + d[:, 3]*s1) * inv_det
+    inv[:, 1, 3] =  (c[:, 0]*s5 - c[:, 2]*s2 + c[:, 3]*s1) * inv_det
+
+    inv[:, 2, 0] =  (b[:, 0]*c4 - b[:, 1]*c2 + b[:, 3]*c0) * inv_det
+    inv[:, 2, 1] = -(a[:, 0]*c4 - a[:, 1]*c2 + a[:, 3]*c0) * inv_det
+    inv[:, 2, 2] =  (d[:, 0]*s4 - d[:, 1]*s2 + d[:, 3]*s0) * inv_det
+    inv[:, 2, 3] = -(c[:, 0]*s4 - c[:, 1]*s2 + c[:, 3]*s0) * inv_det
+
+    inv[:, 3, 0] = -(b[:, 0]*c3 - b[:, 1]*c1 + b[:, 2]*c0) * inv_det
+    inv[:, 3, 1] =  (a[:, 0]*c3 - a[:, 1]*c1 + a[:, 2]*c0) * inv_det
+    inv[:, 3, 2] = -(d[:, 0]*s3 - d[:, 1]*s1 + d[:, 2]*s0) * inv_det
+    inv[:, 3, 3] =  (c[:, 0]*s3 - c[:, 1]*s1 + c[:, 2]*s0) * inv_det
+    return inv
 
 def homo_warping_3D_with_mask(src_fea, src_proj, ref_proj, depth_values):
     # src_fea: [B, C, H, W]
@@ -77,7 +122,10 @@ def homo_warping_3D_with_mask(src_fea, src_proj, ref_proj, depth_values):
     height, width = src_fea.shape[2], src_fea.shape[3]
 
     with torch.no_grad():
-        proj = torch.matmul(src_proj, torch.inverse(ref_proj))
+        # ref_proj_inv, _ = torch.linalg.inv_ex(ref_proj)
+        ref_proj_inv = inverse_4x4(ref_proj)
+
+        proj = torch.matmul(src_proj, ref_proj_inv)
         rot = proj[:, :3, :3]  # [B,3,3]
         trans = proj[:, :3, 3:4]  # [B,3,1]
 

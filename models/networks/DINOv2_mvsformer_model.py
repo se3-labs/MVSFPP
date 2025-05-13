@@ -65,7 +65,15 @@ class DINOv2MVSNet(nn.Module):
 
         return vit_feat
 
-    def forward(self, imgs, proj_matrices, depth_values, tmp=[5., 5., 5., 1.]):
+    def forward(self, imgs, P_stage1, P_stage2, P_stage3, P_stage4,
+                depth_values):
+        tmp = [5., 5., 5., 1.]
+        proj_matrices = {
+            "stage1": P_stage1,
+            "stage2": P_stage2,
+            "stage3": P_stage3,
+            "stage4": P_stage4
+        }
         B, V, H, W = imgs.shape[0], imgs.shape[1], imgs.shape[3], imgs.shape[4]
         depth_interval = depth_values[:, 1] - depth_values[:, 0]
         # dinov2 patchsize=14,  0.5 * 14/16
@@ -163,17 +171,15 @@ class DINOv2MVSNet(nn.Module):
 
             outputs_stage = self.fusions[stage_idx].forward(features_stage, proj_matrices_stage, depth_samples,
                                                             tmp=tmp[stage_idx], position3d=position3d)
-            outputs["stage{}".format(stage_idx + 1)] = outputs_stage
+            # outputs["stage{}".format(stage_idx + 1)] = outputs_stage
             depth_conf = outputs_stage['photometric_confidence']
             if depth_conf.shape[1] != prob_maps.shape[1] or depth_conf.shape[2] != prob_maps.shape[2]:
                 depth_conf = F.interpolate(depth_conf.unsqueeze(1), [prob_maps.shape[1], prob_maps.shape[2]],
-                                           mode="nearest").squeeze(1)
+                                           mode="nearest")[:,0,:,:]
             prob_maps += depth_conf
             valid_count += 1
-            outputs.update(outputs_stage)
+            # outputs.update(outputs_stage)
 
         outputs['refined_depth'] = outputs_stage['depth']
-        if valid_count > 0:
-            outputs['photometric_confidence'] = prob_maps / valid_count
-
-        return outputs
+        outputs['photometric_confidence'] = prob_maps / valid_count
+        return outputs['refined_depth'], outputs['photometric_confidence']

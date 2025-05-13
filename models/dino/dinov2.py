@@ -191,7 +191,8 @@ class DinoVisionTransformer(nn.Module):
 
         patch_pos_embed = nn.functional.interpolate(
             patch_pos_embed.reshape(1, int(math.sqrt(N)), int(math.sqrt(N)), dim).permute(0, 3, 1, 2),
-            scale_factor=(w0 / math.sqrt(N), h0 / math.sqrt(N)),
+            scale_factor=(float(w0 / math.sqrt(N)), float(h0 / math.sqrt(N))),
+            # scale_factor=(w0 / math.sqrt(N), h0 / math.sqrt(N)),
             mode="bicubic",
         )
 

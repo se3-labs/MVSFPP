@@ -391,9 +391,9 @@ class CostRegNet(nn.Module):
             self.prob = nn.Conv3d(base_channels, 1, 3, stride=1, padding=1, bias=False)
 
     def forward(self, x, *kwargs):
-        import torch.utils.checkpoint as cp
-        x = cp.checkpoint(self.forward_once, x)
-        return x
+        # import torch.utils.checkpoint as cp
+        # x = cp.checkpoint(self.forward_once, x)
+        return self.forward_once(x)
 
     def forward_once(self, x, *kwargs):
         conv0 = x
@@ -486,10 +486,10 @@ class CostRegNet3D(nn.Module):
         self.prob = nn.Conv3d(base_channel, 2 if self.log_var else 1, 1, stride=1, padding=0)
 
     def forward(self, x, *kwargs):
-        import torch.utils.checkpoint as cp
+        # import torch.utils.checkpoint as cp
 
-        x = cp.checkpoint(self.forward_once, x)
-        return x
+        # x = cp.checkpoint(self.forward_once, x)
+        return self.forward_once(x)
 
     def forward_once(self, x, *kwargs):
         conv0 = x
@@ -661,14 +661,14 @@ def conf_regression(p, n=4):
         # photometric confidence
         if n % 2 == 1:
             prob_volume_sum4 = n * F.avg_pool3d(F.pad(p.unsqueeze(1), pad=[0, 0, 0, 0, n // 2, n // 2]),
-                                                (n, 1, 1), stride=1, padding=0).squeeze(1)
+                                                (n, 1, 1), stride=1, padding=0)[:,0,...]
         else:
             prob_volume_sum4 = n * F.avg_pool3d(F.pad(p.unsqueeze(1), pad=[0, 0, 0, 0, n // 2 - 1, n // 2]),
-                                                (n, 1, 1), stride=1, padding=0).squeeze(1)
+                                                (n, 1, 1), stride=1, padding=0)[:,0,...]
         depth_index = depth_regression(p.detach(), depth_values=torch.arange(ndepths, device=p.device, dtype=torch.float)).long()
         depth_index = depth_index.clamp(min=0, max=ndepths - 1)
         conf = torch.gather(prob_volume_sum4, 1, depth_index.unsqueeze(1))
-    return conf.squeeze(1)
+    return conf[:,0,...]
 
 
 def init_range(cur_depth, ndepths, device, dtype, H, W):
@@ -678,7 +678,7 @@ def init_range(cur_depth, ndepths, device, dtype, H, W):
         new_interval = (cur_depth_max - cur_depth_min) / (ndepths - 1)  # (B, )
         new_interval = new_interval[:, None, None]  # B H W
         depth_range_samples = cur_depth_min.unsqueeze(1) + (torch.arange(0, ndepths, device=device, dtype=dtype,
-                                                                         requires_grad=False).reshape(1, -1) * new_interval.squeeze(1))  # (B, D)
+                                                                         requires_grad=False).reshape(1, -1) * new_interval[:,0,...])  # (B, D)
         depth_range_samples = depth_range_samples.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, H, W)  # (B, D, H, W)
     else:
         cur_depth_min = cur_depth[..., 0]  # (B,H,W)
@@ -720,7 +720,7 @@ def schedule_inverse_range(depth, depth_hypo, ndepths, split_itv, H, W, shift=Fa
                        requires_grad=False).reshape(1, -1, 1, 1).repeat(1, 1, H // 2, W // 2) / (ndepths - 1)  # 1 D H W
 
     inverse_depth_hypo = inverse_max_depth[:, None, :, :] + (inverse_min_depth - inverse_max_depth)[:, None, :, :] * itv  # B D H W
-    inverse_depth_hypo = F.interpolate(inverse_depth_hypo.unsqueeze(1), [ndepths, H, W], mode='trilinear', align_corners=True).squeeze(1)
+    inverse_depth_hypo = F.interpolate(inverse_depth_hypo.unsqueeze(1), [ndepths, H, W], mode='trilinear', align_corners=True)[:,0,...]
     return 1. / inverse_depth_hypo
 
 
@@ -737,7 +737,7 @@ def schedule_range(cur_depth, ndepth, depth_inteval_pixel, H, W):
 
     depth_range_samples = cur_depth_min.unsqueeze(1) + (torch.arange(0, ndepth, device=cur_depth.device, dtype=cur_depth.dtype,
                                                                      requires_grad=False).reshape(1, -1, 1, 1) * new_interval.unsqueeze(1))
-    depth_range_samples = F.interpolate(depth_range_samples.unsqueeze(1), [ndepth, H, W], mode='trilinear', align_corners=True).squeeze(1)
+    depth_range_samples = F.interpolate(depth_range_samples.unsqueeze(1), [ndepth, H, W], mode='trilinear', align_corners=True)[:,0,...]
     return depth_range_samples
 
 

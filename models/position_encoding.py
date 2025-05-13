@@ -138,13 +138,23 @@ class EpipoleEncodingSineNorm(nn.Module):
 def get_position_3d(B, H, W, K, depth_values, depth_min, depth_max, height_min, height_max, width_min, width_max, normalize=True):
     num_depth = depth_values.shape[1]
     with torch.no_grad():
+        # K_inv, _ = torch.linalg.inv_ex(K)
+        # K⁻¹ = | 1/fx  0     -cx/fx |
+        #       | 0     1/fy  -cy/fy |
+        #       | 0      0      1    |
+        K_inv = torch.eye(3, device=K.device).unsqueeze(0).repeat(B, 1, 1)
+        K_inv[:, 0, 0] = 1 / K[:, 0, 0]
+        K_inv[:, 1, 1] = 1 / K[:, 1, 1]
+        K_inv[:, 0, 2] = -K[:, 0, 2] / K[:, 0, 0]
+        K_inv[:, 1, 2] = -K[:, 1, 2] / K[:, 1, 1]
+
         y, x = torch.meshgrid([torch.arange(0, H, dtype=torch.float32, device=K.device),
                                torch.arange(0, W, dtype=torch.float32, device=K.device)], indexing='ij')
         y, x = y.contiguous(), x.contiguous()
         y, x = y.view(H * W), x.view(H * W)
         xyz = torch.stack((x, y, torch.ones_like(x)))  # [3, H*W]
         xyz = torch.unsqueeze(xyz, 0).repeat(B, 1, 1)  # [B, 3, H*W]
-        xyz = torch.matmul(torch.inverse(K), xyz)  # [B, 3, H*W]
+        xyz = torch.matmul(K_inv, xyz)  # [B, 3, H*W]
         # point position in 3d space
         position3d = xyz.unsqueeze(2).repeat(1, 1, num_depth, 1) * depth_values.view(B, 1, num_depth, -1)  # [B, 3, 1, H*W]->[B,3,D,H*W]
         if normalize:  # minmax normalization
@@ -166,7 +176,7 @@ def PositionEncoding3D(position3d, C, rescale=4.0):
     # position3d:[B,3,D,H,W]
     # rescale: 这个参数是trade-off远程衰减和震荡程度的系数，目测下来对0~1和维度8的PE 4.0比较好
     B, _, D, H, W = position3d.shape
-    div_term = torch.exp(torch.arange(0, C, 2).float() * (-math.log(10000.0) / C)).to(position3d.device)
+    div_term = torch.exp(torch.arange(0, C, 2, device=position3d.device, dtype=torch.float32) * (-math.log(10000.0) / C))
     div_term = div_term[None, :, None]  # [1,C//2,1]
 
     pe_x = torch.zeros((B, C, D * H * W), dtype=torch.float32, device=position3d.device)

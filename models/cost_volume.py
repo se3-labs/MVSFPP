@@ -102,17 +102,18 @@ class StageNet(nn.Module):
 
         cost_reg = self.cost_reg(volume_mean, position3d)
 
-        prob_volume_pre = cost_reg.squeeze(1)
+        prob_volume_pre = cost_reg[:,0,...]
         prob_volume = F.softmax(prob_volume_pre, dim=1)
 
         if self.depth_type == 'ce':
             if self.training:
                 _, idx = torch.max(prob_volume, dim=1)
                 # vanilla argmax
-                depth = torch.gather(depth_values, dim=1, index=idx.unsqueeze(1)).squeeze(1)
+                depth = torch.gather(depth_values, dim=1, index=idx.unsqueeze(1))[:,0,...]
             else:
                 # regression (t)
-                depth = depth_regression(F.softmax(prob_volume_pre * tmp, dim=1), depth_values=depth_values)
+                prob_volume_float = F.softmax(prob_volume_pre * tmp, dim=1).float()
+                depth = depth_regression(prob_volume_float, depth_values=depth_values)
             # conf
             photometric_confidence = prob_volume.max(1)[0]  # [B,H,W]
 
