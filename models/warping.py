@@ -119,18 +119,22 @@ def homo_warping_3D_with_mask(src_fea, src_proj, ref_proj, depth_values):
     # out: [B, C, Ndepth, H, W]
     batch, channels = src_fea.shape[0], src_fea.shape[1]
     num_depth = depth_values.shape[1]
-    height, width = src_fea.shape[2], src_fea.shape[3]
+    # height, width = src_fea.shape[2], src_fea.shape[3]
+    height = torch.tensor([src_fea.shape[2]], dtype=torch.int32, device=src_fea.device)[0]
+    width = torch.tensor([src_fea.shape[3]], dtype=torch.int32, device=src_fea.device)[0]
 
     with torch.no_grad():
         # ref_proj_inv, _ = torch.linalg.inv_ex(ref_proj)
         ref_proj_inv = inverse_4x4(ref_proj)
 
-        proj = torch.matmul(src_proj, ref_proj_inv)
+        proj = torch.matmul(src_proj, ref_proj_inv).to(torch.float16)
         rot = proj[:, :3, :3]  # [B,3,3]
         trans = proj[:, :3, 3:4]  # [B,3,1]
 
-        y, x = torch.meshgrid([torch.arange(0, height, dtype=torch.float32, device=src_fea.device),
-                               torch.arange(0, width, dtype=torch.float32, device=src_fea.device)], indexing='ij')
+        # y, x = torch.meshgrid([torch.arange(0, height, dtype=torch.float32, device=src_fea.device),
+        #                        torch.arange(0, width, dtype=torch.float32, device=src_fea.device)], indexing='ij')
+        y, x = torch.meshgrid([torch.arange(0, height, dtype=torch.float16, device=src_fea.device),
+                               torch.arange(0, width, dtype=torch.float16, device=src_fea.device)], indexing='ij')
         y, x = y.contiguous(), x.contiguous()
         y, x = y.view(height * width), x.view(height * width)
         xyz = torch.stack((x, y, torch.ones_like(x)))  # [3, H*W]

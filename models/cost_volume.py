@@ -64,7 +64,7 @@ class StageNet(nn.Module):
         with autocast(enabled=False):
             for src_feat, src_proj in zip(src_feats, src_projs):
                 # warpped features
-                src_feat = src_feat.to(torch.float32)
+                # src_feat = src_feat.to(torch.float32)
                 src_proj_new = src_proj[:, 0].clone()
                 src_proj_new[:, :3, :4] = torch.matmul(src_proj[:, 1, :3, :3], src_proj[:, 0, :3, :4])
                 ref_proj_new = ref_proj[:, 0].clone()
@@ -78,10 +78,10 @@ class StageNet(nn.Module):
 
                 if G < C:
                     warped_volume = warped_volume.view(B, G, C // G, D, H, W)
-                    ref_volume = ref_feat.view(B, G, C // G, 1, H, W).repeat(1, 1, 1, D, 1, 1).to(torch.float32)
+                    ref_volume = ref_feat.view(B, G, C // G, 1, H, W).repeat(1, 1, 1, D, 1, 1) #.to(torch.float32)
                     in_prod_vol = (ref_volume * warped_volume).mean(dim=2)  # [B,G,D,H,W]
                 elif G == C:
-                    ref_volume = ref_feat.view(B, G, 1, H, W).to(torch.float32)
+                    ref_volume = ref_feat.view(B, G, 1, H, W) #.to(torch.float32)
                     in_prod_vol = ref_volume * warped_volume  # [B,C(G),D,H,W]
                 else:
                     raise AssertionError("G must <= C!")
@@ -112,7 +112,7 @@ class StageNet(nn.Module):
                 depth = torch.gather(depth_values, dim=1, index=idx.unsqueeze(1))[:,0,...]
             else:
                 # regression (t)
-                prob_volume_float = F.softmax(prob_volume_pre * tmp, dim=1).float()
+                prob_volume_float = F.softmax(prob_volume_pre * tmp, dim=1) #.float()
                 depth = depth_regression(prob_volume_float, depth_values=depth_values)
             # conf
             photometric_confidence = prob_volume.max(1)[0]  # [B,H,W]

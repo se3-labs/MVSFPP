@@ -258,13 +258,22 @@ class FPNDecoder(nn.Module):
         intra_feat = conv31
         out0 = self.out0(intra_feat)
 
-        intra_feat = F.interpolate(intra_feat.to(torch.float32), scale_factor=2, mode="bilinear", align_corners=True) + self.inner1(conv21)
+        # intra_feat = F.interpolate(intra_feat.to(torch.float32), scale_factor=2, mode="bilinear", align_corners=True) + self.inner1(conv21)
+        # out1 = self.out1(intra_feat)
+
+        # intra_feat = F.interpolate(intra_feat.to(torch.float32), scale_factor=2, mode="bilinear", align_corners=True) + self.inner2(conv11)
+        # out2 = self.out2(intra_feat)
+
+        # intra_feat = F.interpolate(intra_feat.to(torch.float32), scale_factor=2, mode="bilinear", align_corners=True) + self.inner3(conv01)
+        # out3 = self.out3(intra_feat)
+
+        intra_feat = F.interpolate(intra_feat, scale_factor=2, mode="bilinear", align_corners=True) + self.inner1(conv21)
         out1 = self.out1(intra_feat)
 
-        intra_feat = F.interpolate(intra_feat.to(torch.float32), scale_factor=2, mode="bilinear", align_corners=True) + self.inner2(conv11)
+        intra_feat = F.interpolate(intra_feat, scale_factor=2, mode="bilinear", align_corners=True) + self.inner2(conv11)
         out2 = self.out2(intra_feat)
 
-        intra_feat = F.interpolate(intra_feat.to(torch.float32), scale_factor=2, mode="bilinear", align_corners=True) + self.inner3(conv01)
+        intra_feat = F.interpolate(intra_feat, scale_factor=2, mode="bilinear", align_corners=True) + self.inner3(conv01)
         out3 = self.out3(intra_feat)
 
         return [out0, out1, out2, out3]
@@ -665,7 +674,8 @@ def conf_regression(p, n=4):
         else:
             prob_volume_sum4 = n * F.avg_pool3d(F.pad(p.unsqueeze(1), pad=[0, 0, 0, 0, n // 2 - 1, n // 2]),
                                                 (n, 1, 1), stride=1, padding=0)[:,0,...]
-        depth_index = depth_regression(p.detach(), depth_values=torch.arange(ndepths, device=p.device, dtype=torch.float)).long()
+        # depth_index = depth_regression(p.detach(), depth_values=torch.arange(ndepths, device=p.device, dtype=torch.float)).long()
+        depth_index = depth_regression(p.detach(), depth_values=torch.arange(ndepths, device=p.device)).long()
         depth_index = depth_index.clamp(min=0, max=ndepths - 1)
         conf = torch.gather(prob_volume_sum4, 1, depth_index.unsqueeze(1))
     return conf[:,0,...]
@@ -710,7 +720,7 @@ def schedule_inverse_range(depth, depth_hypo, ndepths, split_itv, H, W, shift=Fa
     inverse_max_depth = 1 / depth - split_itv * last_depth_itv  # B H W
 
     if shift:  # shift is used to prevent negative depth prediction. 0.002 is set when the max depth range is 500
-        is_neg = (inverse_max_depth < 0.002).float()
+        is_neg = (inverse_max_depth < 0.002).to(torch.float16) #.float()
         inverse_max_depth = inverse_max_depth - (inverse_max_depth - 0.002) * is_neg
         inverse_min_depth = inverse_min_depth - (inverse_max_depth - 0.002) * is_neg
 

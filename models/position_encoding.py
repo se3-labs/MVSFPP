@@ -61,10 +61,12 @@ class PositionEncodingSineNorm(nn.Module):
     def reset_pe(self, new_shape, device):
         (H, W) = new_shape
         pe = torch.zeros((self.d_model, H, W))
-        y_position = torch.ones((H, W)).cumsum(0).float().unsqueeze(0) * self.max_shape[0] / H
-        x_position = torch.ones((H, W)).cumsum(1).float().unsqueeze(0) * self.max_shape[1] / W
-
-        div_term = torch.exp(torch.arange(0, self.d_model // 2, 2).float() * (-math.log(10000.0) / (self.d_model // 2)))
+        # y_position = torch.ones((H, W)).cumsum(0).float().unsqueeze(0) * self.max_shape[0] / H
+        # x_position = torch.ones((H, W)).cumsum(1).float().unsqueeze(0) * self.max_shape[1] / W
+        # div_term = torch.exp(torch.arange(0, self.d_model // 2, 2).float() * (-math.log(10000.0) / (self.d_model // 2)))
+        y_position = torch.ones((H, W)).cumsum(0).unsqueeze(0) * self.max_shape[0] / H
+        x_position = torch.ones((H, W)).cumsum(1).unsqueeze(0) * self.max_shape[1] / W
+        div_term = torch.exp(torch.arange(0, self.d_model // 2, 2) * (-math.log(10000.0) / (self.d_model // 2)))
         div_term = div_term[:, None, None]  # [C//4, 1, 1]
         pe[0::4, :, :] = torch.sin(x_position * div_term)
         pe[1::4, :, :] = torch.cos(x_position * div_term)
@@ -135,21 +137,27 @@ class EpipoleEncodingSineNorm(nn.Module):
         return x + pe
 
 
-def get_position_3d(B, H, W, K, depth_values, depth_min, depth_max, height_min, height_max, width_min, width_max, normalize=True):
+def get_position_3d(B, height, width, K, depth_values, depth_min, depth_max, height_min, height_max, width_min, width_max, normalize=True):
     num_depth = depth_values.shape[1]
     with torch.no_grad():
         # K_inv, _ = torch.linalg.inv_ex(K)
         # K⁻¹ = | 1/fx  0     -cx/fx |
         #       | 0     1/fy  -cy/fy |
         #       | 0      0      1    |
-        K_inv = torch.eye(3, device=K.device).unsqueeze(0).repeat(B, 1, 1)
+        # K_inv = torch.eye(3, device=K.device).unsqueeze(0).repeat(B, 1, 1)
+        K_inv = torch.eye(3, device=K.device, dtype=torch.float16).unsqueeze(0).repeat(B, 1, 1)
         K_inv[:, 0, 0] = 1 / K[:, 0, 0]
         K_inv[:, 1, 1] = 1 / K[:, 1, 1]
         K_inv[:, 0, 2] = -K[:, 0, 2] / K[:, 0, 0]
         K_inv[:, 1, 2] = -K[:, 1, 2] / K[:, 1, 1]
 
-        y, x = torch.meshgrid([torch.arange(0, H, dtype=torch.float32, device=K.device),
-                               torch.arange(0, W, dtype=torch.float32, device=K.device)], indexing='ij')
+        H = torch.tensor([height], dtype=torch.int32, device=K.device)[0]
+        W = torch.tensor([width], dtype=torch.int32, device=K.device)[0]
+
+        # y, x = torch.meshgrid([torch.arange(0, H, dtype=torch.float32, device=K.device),
+        #                        torch.arange(0, W, dtype=torch.float32, device=K.device)], indexing='ij')
+        y, x = torch.meshgrid([torch.arange(0, H, dtype=torch.float16, device=K.device),
+                               torch.arange(0, W, dtype=torch.float16, device=K.device)], indexing='ij')
         y, x = y.contiguous(), x.contiguous()
         y, x = y.view(H * W), x.view(H * W)
         xyz = torch.stack((x, y, torch.ones_like(x)))  # [3, H*W]

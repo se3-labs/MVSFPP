@@ -159,7 +159,8 @@ class FMT_with_pathway(nn.Module):
         """
 
         _, _, H, W = y.size()
-        return F.interpolate(x.to(torch.float32), size=(H, W), mode='bilinear') + y
+        # return F.interpolate(x.to(torch.float32), size=(H, W), mode='bilinear') + y
+        return F.interpolate(x, size=(H, W), mode='bilinear') + y
 
     def forward(self, features):
         """forward.

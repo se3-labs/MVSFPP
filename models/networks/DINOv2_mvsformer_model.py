@@ -130,7 +130,8 @@ class DINOv2MVSNet(nn.Module):
         height_min, height_max = None, None
         width_min, width_max = None, None
 
-        prob_maps = torch.zeros([B, H, W], dtype=torch.float32, device=imgs.device)
+        # prob_maps = torch.zeros([B, H, W], dtype=torch.float32, device=imgs.device)
+        prob_maps = torch.zeros([B, H, W], dtype=torch.float16, device=imgs.device)
         valid_count = 0
         for stage_idx in range(len(self.ndepths)):
             proj_matrices_stage = proj_matrices["stage{}".format(stage_idx + 1)]  # [B,V,2,4,4]
