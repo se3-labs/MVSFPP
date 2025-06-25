@@ -15,7 +15,7 @@ class identity_with(object):
         pass
 
 
-autocast = torch.cuda.amp.autocast if torch.__version__ >= '1.6.0' else identity_with
+autocast = lambda *args, **kwargs: torch.amp.autocast('cuda', *args, **kwargs) if torch.__version__ >= '1.6.0' else identity_with
 
 
 class StageNet(nn.Module):

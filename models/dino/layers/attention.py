@@ -274,7 +274,7 @@ class CrossLinearAttention(CrossAttention):
         # Compute the KV matrix, namely the dot product of keys and values so
         # that we never explicitly compute the attention matrix and thus
         # decrease the complexity [B,L,nh,C]x[B,L,nh,C]->[B,nh,C,C]
-        with torch.cuda.amp.autocast(enabled=False):
+        with torch.amp.autocast(enabled=False, device_type="cuda"):
             KV = torch.einsum("nshd,nshm->nhmd", k, v)
 
             # Compute the normalizer [B,L,nh,C]x[B,nh,C]->[B,L,nh]
